@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 def bibliotik_archive_run():
     start = time.time()
 
+    state = BibliotikArchiverState.objects.get()
+    if not state.is_enabled:
+        return
+
     try:
         client = BibliotikClient()
     except BibliotikClient:
@@ -28,7 +32,6 @@ def bibliotik_archive_run():
 
     tracker = TrackerRegistry.get_plugin('bibliotik', 'bibliotik_archive_run')
     realm = Realm.objects.get(name=tracker.name)
-    state = BibliotikArchiverState.objects.get()
     search_results = parse_search_results(client.search(''))
     max_tracker_id = search_results[0]['tracker_id']
 
