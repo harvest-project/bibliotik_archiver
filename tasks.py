@@ -6,6 +6,7 @@ from huey.contrib.djhuey import db_periodic_task, lock_task
 from Harvest.huey_scheduler import IntervalSeconds
 from Harvest.utils import get_logger
 from monitoring.decorators import update_component_status
+from monitoring.models import ComponentStatus
 from plugins.bibliotik.client import BibliotikClient
 from plugins.bibliotik.exceptions import BibliotikTorrentNotFoundException
 from plugins.bibliotik.html_parser import parse_search_results
@@ -22,8 +23,7 @@ logger = get_logger(__name__)
 @lock_task('bibliotik_archive_run')
 @update_component_status(
     'bibliotik_archiver_metadata',
-    'Completed Bibliotik archiver metadata run in {time_taken:.3f} s.',
-    'Bibliotik archiver metadata crashed.',
+    error_message='Bibliotik archiver metadata crashed.',
 )
 def bibliotik_archive_run():
     start = time.time()
@@ -53,20 +53,29 @@ def bibliotik_archive_run():
         if time.time() - start >= 55:
             break
 
+    time_taken = time.time() - start
+    ComponentStatus.update_status(
+        'bibliotik_archiver_metadata',
+        ComponentStatus.STATUS_GREEN,
+        'Completed Bibliotik archiver metadata run in {:.3f} s. Progress: {} / {}.'.format(
+            time_taken, state.last_meta_tracker_id, max_tracker_id),
+    )
+
 
 @db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_DOWNLOAD_INTERVAL))
 @lock_task('bibliotik_archive_download_torrent')
 @update_component_status(
     'bibliotik_archiver_download',
-    'Completed Bibliotik archiver download torrent run in {time_taken:.3f} s.',
-    'Bibliotik archiver download torrent crashed.',
+    error_message='Bibliotik archiver erdownload torrent crashed.',
 )
 def bibliotik_archive_download_torrent():
+    start = time.time()
+
     state = BibliotikArchiverState.objects.get()
     if not state.is_download_enabled:
         return
 
-    bibliotik_torrent = get_bibliotik_torrent_for_archiving()
+    bibliotik_torrent, num_remaining = get_bibliotik_torrent_for_archiving()
 
     if not bibliotik_torrent:
         logger.info('Bibliotik torrent download - nothing to download.')
@@ -92,4 +101,12 @@ def bibliotik_archive_download_torrent():
         tracker_id=tracker_id,
         download_path_pattern=download_location.pattern,
         force_fetch=False,
+    )
+
+    time_taken = time.time() - start
+    ComponentStatus.update_status(
+        'bibliotik_archiver_download',
+        ComponentStatus.STATUS_GREEN,
+        'Completed Bibliotik archiver download torrent run in {:.3f} s. Remaining: {}.'.format(
+            time_taken, num_remaining - 1),
     )
