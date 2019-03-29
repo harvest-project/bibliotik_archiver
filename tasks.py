@@ -1,8 +1,9 @@
 import time
 
+from django.conf import settings
 from huey.contrib.djhuey import db_periodic_task, lock_task
 
-from Harvest.huey_scheduler import Crontab
+from Harvest.huey_scheduler import IntervalSeconds
 from Harvest.utils import get_logger
 from monitoring.decorators import update_component_status
 from plugins.bibliotik.client import BibliotikClient
@@ -17,7 +18,7 @@ from trackers.registry import TrackerRegistry
 logger = get_logger(__name__)
 
 
-@db_periodic_task(Crontab())
+@db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_METADATA_INTERVAL))
 @lock_task('bibliotik_archive_run')
 @update_component_status(
     'bibliotik_archiver_metadata',
@@ -53,7 +54,7 @@ def bibliotik_archive_run():
             break
 
 
-@db_periodic_task(Crontab())
+@db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_DOWNLOAD_INTERVAL))
 @lock_task('bibliotik_archive_download_torrent')
 @update_component_status(
     'bibliotik_archiver_download',
