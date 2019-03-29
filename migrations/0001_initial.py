@@ -6,7 +6,7 @@ from django.db import migrations, models
 def create_initial_archiver_state(apps, schema_editor):
     BibliotikArchiverState = apps.get_model('bibliotik_archiver', 'BibliotikArchiverState')
     BibliotikArchiverState.objects.create(
-        is_enabled=True,
+        is_enabled=False,
         last_meta_tracker_id=0,
     )
 
