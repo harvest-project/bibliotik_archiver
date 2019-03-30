@@ -49,7 +49,7 @@ def bibliotik_archive_run():
             logger.info('Bibliotik torrent {} not found.', tracker_id)
         state.last_meta_tracker_id = tracker_id
         state.save(update_fields=('last_meta_tracker_id',))
-        time.sleep(1)
+        time.sleep(settings.BIBLIOTIK_ARCHIVER_METADATA_SLEEP)
         if time.time() - start >= 55:
             break
 
