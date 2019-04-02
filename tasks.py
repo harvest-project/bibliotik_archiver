@@ -10,22 +10,23 @@ from monitoring.models import ComponentStatus
 from plugins.bibliotik.client import BibliotikClient
 from plugins.bibliotik.exceptions import BibliotikTorrentNotFoundException
 from plugins.bibliotik.html_parser import parse_search_results
+from plugins.bibliotik.tracker import BibliotikTrackerPlugin
 from plugins.bibliotik_archiver.models import BibliotikArchiverState
 from plugins.bibliotik_archiver.utils import get_bibliotik_torrent_for_archiving
 from torrents.add_torrent import fetch_torrent, add_torrent_from_tracker
-from torrents.models import Realm, DownloadLocation
+from torrents.models import Realm
 from trackers.registry import TrackerRegistry
 
 logger = get_logger(__name__)
 
 
 @db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_METADATA_INTERVAL))
-@lock_task('bibliotik_archive_run')
+@lock_task('bibliotik_archiver_metadata')
 @update_component_status(
     'bibliotik_archiver_metadata',
     error_message='Bibliotik archiver metadata crashed.',
 )
-def bibliotik_archive_run():
+def bibliotik_archiver_metadata():
     start = time.time()
 
     state = BibliotikArchiverState.objects.get()
@@ -33,7 +34,7 @@ def bibliotik_archive_run():
         return
 
     client = BibliotikClient()
-    tracker = TrackerRegistry.get_plugin('bibliotik', 'bibliotik_archive_run')
+    tracker = TrackerRegistry.get_plugin(BibliotikTrackerPlugin.name, 'bibliotik_archiver_metadata')
     realm = Realm.objects.get(name=tracker.name)
     search_results = parse_search_results(client.search(''))
     max_tracker_id = search_results[0]['tracker_id']
@@ -42,7 +43,7 @@ def bibliotik_archive_run():
 
     num_scraped = 0
     # last_meta_tracker_id was the last one processed, so resume from the next.
-    for tracker_id in range(state.last_meta_tracker_id + 1, max_tracker_id):
+    for tracker_id in range(state.last_meta_tracker_id + 1, max_tracker_id + 1):
         try:
             fetch_torrent(realm, tracker, tracker_id)
             logger.info('Bibliotik torrent {} fetched.', tracker_id)
@@ -51,9 +52,15 @@ def bibliotik_archive_run():
         state.last_meta_tracker_id = tracker_id
         state.save(update_fields=('last_meta_tracker_id',))
         num_scraped += 1
-        time.sleep(settings.BIBLIOTIK_ARCHIVER_METADATA_SLEEP)
-        if time.time() - start >= 55:
+
+        allowed_time = (
+                settings.BIBLIOTIK_ARCHIVER_METADATA_INTERVAL -
+                settings.BIBLIOTIK_ARCHIVER_METADATA_SLEEP -
+                4
+        )
+        if time.time() - start >= allowed_time:
             break
+        time.sleep(settings.BIBLIOTIK_ARCHIVER_METADATA_SLEEP)
 
     time_taken = time.time() - start
     ComponentStatus.update_status(
@@ -65,12 +72,12 @@ def bibliotik_archive_run():
 
 
 @db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_DOWNLOAD_INTERVAL))
-@lock_task('bibliotik_archive_download_torrent')
+@lock_task('bibliotik_archiver_download_torrent')
 @update_component_status(
     'bibliotik_archiver_download',
     error_message='Bibliotik archiver erdownload torrent crashed.',
 )
-def bibliotik_archive_download_torrent():
+def bibliotik_archiver_download_torrent():
     start = time.time()
 
     state = BibliotikArchiverState.objects.get()
