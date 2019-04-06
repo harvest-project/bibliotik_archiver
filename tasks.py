@@ -75,7 +75,7 @@ def bibliotik_archiver_metadata():
 @lock_task('bibliotik_archiver_download_torrent')
 @update_component_status(
     'bibliotik_archiver_download',
-    error_message='Bibliotik archiver erdownload torrent crashed.',
+    error_message='Bibliotik archiver download torrent crashed.',
 )
 def bibliotik_archiver_download_torrent():
     start = time.time()
