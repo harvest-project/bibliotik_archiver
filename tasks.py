@@ -1,9 +1,7 @@
 import time
 
 from django.conf import settings
-from huey.contrib.djhuey import db_periodic_task, lock_task
 
-from Harvest.huey_scheduler import IntervalSeconds
 from Harvest.utils import get_logger
 from monitoring.decorators import update_component_status
 from monitoring.models import ComponentStatus
@@ -13,6 +11,7 @@ from plugins.bibliotik.html_parser import parse_search_results
 from plugins.bibliotik.tracker import BibliotikTrackerPlugin
 from plugins.bibliotik_archiver.models import BibliotikArchiverState
 from plugins.bibliotik_archiver.utils import get_bibliotik_torrent_for_archiving
+from task_queue.task_queue import TaskQueue
 from torrents.add_torrent import fetch_torrent, add_torrent_from_tracker
 from torrents.models import Realm
 from trackers.registry import TrackerRegistry
@@ -20,8 +19,7 @@ from trackers.registry import TrackerRegistry
 logger = get_logger(__name__)
 
 
-@db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_METADATA_INTERVAL))
-@lock_task('bibliotik_archiver_metadata')
+@TaskQueue.periodic_task(settings.BIBLIOTIK_ARCHIVER_METADATA_INTERVAL)
 @update_component_status(
     'bibliotik_archiver_metadata',
     error_message='Bibliotik archiver metadata crashed.',
@@ -71,8 +69,7 @@ def bibliotik_archiver_metadata():
     )
 
 
-@db_periodic_task(IntervalSeconds(settings.BIBLIOTIK_ARCHIVER_DOWNLOAD_INTERVAL))
-@lock_task('bibliotik_archiver_download_torrent')
+@TaskQueue.periodic_task(settings.BIBLIOTIK_ARCHIVER_DOWNLOAD_INTERVAL)
 @update_component_status(
     'bibliotik_archiver_download',
     error_message='Bibliotik archiver download torrent crashed.',
